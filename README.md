@@ -24,14 +24,16 @@ Requires a private endpoint to STS from the private vpc
 Cache the connection (db) for future lambda runs to prevent lots of connections opening
 
 ```typescript
+/**
+ * Fetch environment variables from config
+ */
 const accessRoleArn = config.get('accessRoleArn');
-const clusterName = config.get('clusterName');
-
-const sts = new STSClient();
+const clusterHost = config.get('clusterHost');
 
 let client: MongoClient | null = null;
 let db: Db | null = null;
 
+const sts = new STSClient();
 const defaultConnOptions: MongoClientOptions = {
   // eg: maxPoolSize: 10, ssl: true, etc.
 };
@@ -39,26 +41,39 @@ const defaultConnOptions: MongoClientOptions = {
 export async function connectWithIAM(
   options: MongoClientOptions = {},
 ): Promise<Db> {
-  console.log('Getting mongo client');
+  logger.info('Starting Connection...');
+
   if (db) {
-    console.log('Returning mongo client in cache');
+    logger.info('Returning MongoClient db from cache');
     return db;
   }
+
+  logger.info('No cached connection. Fetching credentials from STS...');
+
   const command = new AssumeRoleCommand({
     RoleArn: accessRoleArn,
     RoleSessionName: 'HealthCheckServiceConnection',
   });
-  console.log('Fetching credentials', command);
-  const { Credentials } = await sts.send(command);
 
+  const { Credentials } = await sts.send(command);
   if (!Credentials) {
-    throw new Error('Failed to assume mongo db IAM role');
+    throw new Error('Failed to assume MDB IAM role');
   }
 
   const { AccessKeyId, SessionToken, SecretAccessKey } = Credentials;
-  const encodedSecretKey = encodeURIComponent(SecretAccessKey || '');
-  const combo = `${AccessKeyId}:${encodedSecretKey}`;
-  const url = new URL(`mongodb+srv://${combo}@${clusterName}.mongodb.net`);
+
+  const encodedAccessKey = encodeURIComponent(SecretAccessKey || '');
+  const mdbUserCredentials = `${AccessKeyId}:${encodedAccessKey}`;
+
+  logger.info('Preparing Connection String');
+
+  // Cluster host is the full host i.e. {cluster_name}-{private_link_id}-{internal_project_id}
+  // private_link_id is only set if using a private endpoint
+  // internal_project_id is an Atlas internal 5 character unique string
+  // for example {myatlascluster-pl-0.a0bc0}.mongodb.net
+  const url = new URL(
+    `mongodb+srv://${mdbUserCredentials}@${clusterHost}.mongodb.net`,
+  );
   url.searchParams.set('authSource', '$external');
   url.searchParams.set(
     'authMechanismProperties',
@@ -68,17 +83,19 @@ export async function connectWithIAM(
   url.searchParams.set('retryWrites', 'true');
   url.searchParams.set('authMechanism', 'MONGODB-AWS');
 
-  console.log('Connecting with MongoClient');
+  logger.info('Connecting to MongoDB');
+
   const mongoClient = new MongoClient(url.toString(), {
     ...defaultConnOptions,
     ...options,
   });
+
   client = await mongoClient.connect();
 
   const dbName = config.get('databaseName') || client.options.dbName;
   db = client.db(dbName);
 
-  console.log('Successfully connected to mongo db, returning mongo client');
+  logger.info('Successfully connected to MongoDB, returning MongoClient db');
   return db;
 }
 ```

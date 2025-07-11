@@ -38,7 +38,7 @@ module "health_check_function" {
   vpc_id                  = module.health_check_vpc.vpc_id
   private_subnet_id       = module.health_check_vpc.vpc_prv_subnet_id
   atlas_security_group_id = module.health_check_vpc.atlas_security_group_id
-  cluster_name            = var.MDB_ATLAS_CLUSTER_NAME
+  cluster_hostname        = var.MDB_ATLAS_CLUSTER_HOSTNAME
   access_role_arn         = module.mdb_access_role.role_arn
   tags                    = local.common_tags
 

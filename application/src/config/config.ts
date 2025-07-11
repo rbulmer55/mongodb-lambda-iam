@@ -26,10 +26,10 @@ export const config = convict({
     default: 'accessRoleArn',
     env: 'MDB_ACCESS_ROLE_ARN',
   },
-  clusterName: {
-    doc: 'The name of the cluster for connection string',
+  clusterHost: {
+    doc: 'The hostname of the cluster for connection string',
     format: String,
-    default: 'clusterName',
-    env: 'MDB_CLUSTER_NAME',
+    default: 'clusterHost',
+    env: 'MDB_CLUSTER_HOSTNAME',
   },
 }).validate({ allowed: 'strict' });

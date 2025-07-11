@@ -86,7 +86,7 @@ resource "aws_lambda_function" "health_check_function" {
     variables = {
       MDB_ACCESS_ROLE_ARN : var.access_role_arn
       DB_NAME : "Admin"
-      MDB_CLUSTER_NAME : var.cluster_name
+      MDB_CLUSTER_HOSTNAME : var.cluster_hostname
     }
   }
   tags = var.tags

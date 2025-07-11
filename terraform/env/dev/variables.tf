@@ -13,9 +13,9 @@ variable "MDB_ATLAS_PROJECT_ID" {
   description = "MongoDB Atlas Project ID"
 }
 
-variable "MDB_ATLAS_CLUSTER_NAME" {
+variable "MDB_ATLAS_CLUSTER_HOSTNAME" {
   type        = string
-  description = "MongoDB Atlas Cluster Name"
+  description = "MongoDB Atlas Cluster hostname"
 }
 
 variable "MDB_ATLAS_PUBLIC_KEY" {

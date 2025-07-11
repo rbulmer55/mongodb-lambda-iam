@@ -1,16 +1,19 @@
 import { MongoClient, MongoClientOptions, Db } from 'mongodb';
-import { config } from '@config/config';
-
 import { AssumeRoleCommand, STSClient } from '@aws-sdk/client-sts';
 import { URL } from 'url';
-const accessRoleArn = config.get('accessRoleArn');
-const clusterName = config.get('clusterName');
+import { config } from '@config/config';
+import { logger } from '@shared/logger';
 
-const sts = new STSClient();
+/**
+ * Fetch environment variables from config
+ */
+const accessRoleArn = config.get('accessRoleArn');
+const clusterHost = config.get('clusterHost');
 
 let client: MongoClient | null = null;
 let db: Db | null = null;
 
+const sts = new STSClient();
 const defaultConnOptions: MongoClientOptions = {
   // eg: maxPoolSize: 10, ssl: true, etc.
 };
@@ -18,26 +21,39 @@ const defaultConnOptions: MongoClientOptions = {
 export async function connectWithIAM(
   options: MongoClientOptions = {},
 ): Promise<Db> {
-  console.log('Getting mongo client');
+  logger.info('Starting Connection...');
+
   if (db) {
-    console.log('Returning mongo client in cache');
+    logger.info('Returning MongoClient db from cache');
     return db;
   }
+
+  logger.info('No cached connection. Fetching credentials from STS...');
+
   const command = new AssumeRoleCommand({
     RoleArn: accessRoleArn,
     RoleSessionName: 'HealthCheckServiceConnection',
   });
-  console.log('Fetching credentials', command);
-  const { Credentials } = await sts.send(command);
 
+  const { Credentials } = await sts.send(command);
   if (!Credentials) {
-    throw new Error('Failed to assume mongo db IAM role');
+    throw new Error('Failed to assume MDB IAM role');
   }
 
   const { AccessKeyId, SessionToken, SecretAccessKey } = Credentials;
-  const encodedSecretKey = encodeURIComponent(SecretAccessKey || '');
-  const combo = `${AccessKeyId}:${encodedSecretKey}`;
-  const url = new URL(`mongodb+srv://${combo}@${clusterName}.mongodb.net`);
+
+  const encodedAccessKey = encodeURIComponent(SecretAccessKey || '');
+  const mdbUserCredentials = `${AccessKeyId}:${encodedAccessKey}`;
+
+  logger.info('Preparing Connection String');
+
+  // Cluster host is the full host i.e. {cluster_name}-{private_link_id}-{internal_project_id}
+  // private_link_id is only set if using a private endpoint
+  // internal_project_id is an Atlas internal 5 character unique string
+  // for example {myatlascluster-pl-0.a0bc0}.mongodb.net
+  const url = new URL(
+    `mongodb+srv://${mdbUserCredentials}@${clusterHost}.mongodb.net`,
+  );
   url.searchParams.set('authSource', '$external');
   url.searchParams.set(
     'authMechanismProperties',
@@ -47,23 +63,22 @@ export async function connectWithIAM(
   url.searchParams.set('retryWrites', 'true');
   url.searchParams.set('authMechanism', 'MONGODB-AWS');
 
-  console.log('Connecting with MongoClient');
+  logger.info('Connecting to MongoDB');
+
   const mongoClient = new MongoClient(url.toString(), {
     ...defaultConnOptions,
     ...options,
   });
+
   client = await mongoClient.connect();
 
   const dbName = config.get('databaseName') || client.options.dbName;
   db = client.db(dbName);
 
-  console.log('Successfully connected to mongo db, returning mongo client');
+  logger.info('Successfully connected to MongoDB, returning MongoClient db');
   return db;
 }
 
-/**
- * Optionally, you might want to expose the MongoClient instance for closing the connection
- */
 export function getClient(): MongoClient | null {
   return client;
 }
@@ -71,10 +86,10 @@ export function getClient(): MongoClient | null {
 /** Disconnects the MongoDB client and resets cached connections. */
 export async function disconnect(): Promise<void> {
   if (client) {
-    console.log('DB Service: Disconnecting from database');
+    logger.info('DB Service: Disconnecting from database');
     await client.close();
     client = null;
     db = null;
-    console.log('DB Service: Disconnected');
+    logger.info('DB Service: Disconnected');
   }
 }

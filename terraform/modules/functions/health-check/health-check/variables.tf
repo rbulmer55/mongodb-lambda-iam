@@ -18,8 +18,8 @@ variable "vpc_cidr" {
   type        = string
 }
 
-variable "cluster_name" {
-  description = "MDB Atlas Cluster Name"
+variable "cluster_hostname" {
+  description = "MDB Atlas Cluster hostname"
   type        = string
 }
 
