@@ -9,7 +9,7 @@ resource "aws_iam_role" "mongodb_read_write_access" {
       {
         Effect = "Allow"
         Principal = {
-          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+          Service = "lambda.amazonaws.com"
         }
         Action = "sts:AssumeRole"
       }
