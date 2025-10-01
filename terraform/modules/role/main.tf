@@ -1,5 +1,3 @@
-data "aws_caller_identity" "current" {}
-
 resource "aws_iam_role" "mongodb_read_write_access" {
   name = "MongoDBReadWriteAccess"
 
